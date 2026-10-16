@@ -1,0 +1,3118 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet-search.css">
+        <link rel="stylesheet" href="css/filter.css">
+<link rel="stylesheet" href="css/nouislider.min.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+        <title>Winterdienst Routen 2026/2027</title>
+    </head>
+    <body>
+        <div id="map">
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="js/proj4.js"></script>
+        <script src="js/proj4leaflet.js"></script>
+        <script src="js/leaflet-search.js"></script>
+        <script src="js/tailDT.js"></script>
+<script src="js/nouislider.min.js"></script>
+<script src="js/wNumb.js"></script>
+        <script src="data/UB_Grenzen_1.js"></script>
+        <script src="data/alle_Routen_2.js"></script>
+        <script>
+        var highlightLayer;
+        function highlightFeature(e) {
+            highlightLayer = e.target;
+
+            if (e.target.feature.geometry.type === 'LineString' || e.target.feature.geometry.type === 'MultiLineString') {
+              highlightLayer.setStyle({
+                color: 'rgba(255, 255, 0, 1.00)',
+              });
+            } else {
+              highlightLayer.setStyle({
+                fillColor: 'rgba(255, 255, 0, 1.00)',
+                fillOpacity: 1
+              });
+            }
+            highlightLayer.openPopup();
+        }
+        var crs = new L.Proj.CRS('EPSG:3857', '+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +nadgrids=@null +wktext +no_defs', {
+            resolutions: [2800, 1400, 700, 350, 175, 84, 42, 21, 11.2, 5.6, 2.8, 1.4, 0.7, 0.35, 0.14, 0.07],
+        });
+        var map = L.map('map', {
+            crs: crs,
+            continuousWorld: false,
+            worldCopyJump: false, 
+            zoomControl:false, maxZoom:28, minZoom:3
+        }).fitBounds([[47.19995418199566,8.236563023974727],[47.75861778909116,9.160170730618185]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/qgis2web/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    var img = popup._contentNode.querySelector('td img');
+                    if (img) {
+                        // If already loaded (cache), update immediately
+                        if (img.complete && img.naturalHeight > 0) {
+                            popup.update();
+                        } else {
+                            img.addEventListener('load', function() {
+                                popup.update();
+                            });
+                            img.addEventListener('error', function() {
+                                popup.update();
+                            });
+                        }
+                    }
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var title = new L.Control({'position':'topright'});
+        title.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info');
+            this.update();
+            return this._div;
+        };
+        title.update = function () {
+            this._div.innerHTML = '<h2>Winterdienst Routen 2026/2027</h2>';
+        };
+        title.addTo(map);
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+            map.setMaxBounds(map.getBounds());
+            map.setMinZoom(map.getZoom());
+        }
+        function pop_UB_Grenzen_1(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                    if (typeof layer.closePopup == 'function') {
+                        layer.closePopup();
+                    } else {
+                        layer.eachLayer(function(feature){
+                            feature.closePopup()
+                        });
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['STRASSENRE'] !== null ? autolinker.link(String(feature.properties['STRASSENRE']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['UNTERHALTS'] !== null ? autolinker.link(String(feature.properties['UNTERHALTS']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['ART_TEXT'] !== null ? autolinker.link(String(feature.properties['ART_TEXT']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['UNTERHAL_1'] !== null ? autolinker.link(String(feature.properties['UNTERHAL_1']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['KURZFORM'] !== null ? autolinker.link(String(feature.properties['KURZFORM']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['VERANTWORT'] !== null ? autolinker.link(String(feature.properties['VERANTWORT']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['STRASSE'] !== null ? autolinker.link(String(feature.properties['STRASSE']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['PLZ'] !== null ? autolinker.link(String(feature.properties['PLZ']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['ORT'] !== null ? autolinker.link(String(feature.properties['ORT']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['TELEFON'] !== null ? autolinker.link(String(feature.properties['TELEFON']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['EMAIL'] !== null ? autolinker.link(String(feature.properties['EMAIL']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['LINK'] !== null ? autolinker.link(String(feature.properties['LINK']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['INTERNET'] !== null ? autolinker.link(String(feature.properties['INTERNET']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['HAUSNUMMER'] !== null ? autolinker.link(String(feature.properties['HAUSNUMMER']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['STRASSEN_1'] !== null ? autolinker.link(String(feature.properties['STRASSEN_1']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['STRASSEN_2'] !== null ? autolinker.link(String(feature.properties['STRASSEN_2']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_UB_Grenzen_1_0() {
+            return {
+                pane: 'pane_UB_Grenzen_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 3.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(190,207,80,0.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_UB_Grenzen_1');
+        map.getPane('pane_UB_Grenzen_1').style.zIndex = 401;
+        map.getPane('pane_UB_Grenzen_1').style['mix-blend-mode'] = 'normal';
+        var layer_UB_Grenzen_1 = new L.geoJson(json_UB_Grenzen_1, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_UB_Grenzen_1',
+            layerName: 'layer_UB_Grenzen_1',
+            pane: 'pane_UB_Grenzen_1',
+            onEachFeature: pop_UB_Grenzen_1,
+            style: style_UB_Grenzen_1_0,
+        });
+        bounds_group.addLayer(layer_UB_Grenzen_1);
+        map.addLayer(layer_UB_Grenzen_1);
+        function pop_alle_Routen_2(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                    if (typeof layer.closePopup == 'function') {
+                        layer.closePopup();
+                    } else {
+                        layer.eachLayer(function(feature){
+                            feature.closePopup()
+                        });
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">route</th>\
+                        <td>' + (feature.properties['route'] !== null ? autolinker.link(String(feature.properties['route']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">unterhalt</th>\
+                        <td>' + (feature.properties['unterhalt'] !== null ? autolinker.link(String(feature.properties['unterhalt']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">info</th>\
+                        <td>' + (feature.properties['info'] !== null ? autolinker.link(String(feature.properties['info']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">teileinsatz</th>\
+                        <td>' + (feature.properties['teileinsatz'] !== null ? autolinker.link(String(feature.properties['teileinsatz']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_alle_Routen_2_0(feature) {
+            switch(String(feature.properties['route'])) {
+                case '1001':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(49,134,203,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1002':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(66,209,197,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1003':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(137,201,235,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1004':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(74,145,221,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1005':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(39,230,189,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1006':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(42,146,220,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1007':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(171,112,202,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '101':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(128,117,229,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '102':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(207,226,133,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '103':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(95,78,206,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '104':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(95,205,43,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '105':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(109,127,210,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1050':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(89,209,145,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1051':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(228,141,35,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1052':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(108,235,97,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1053':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(78,232,119,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1054':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(63,207,205,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1055':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(89,218,98,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1056':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(23,151,231,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1057':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(111,200,120,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1071':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(122,130,211,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1072':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(208,237,126,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1201':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(84,205,100,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1202':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(123,219,111,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1203':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(111,206,179,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1204':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(193,53,200,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1205':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(23,206,23,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1206':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(133,238,186,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1207':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(157,81,204,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1208':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(216,189,101,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1209':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(229,157,31,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1210':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(218,81,168,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1211':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(218,201,90,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1212':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(180,239,117,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1213':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(234,135,113,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1214':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(233,121,136,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1215':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(177,136,232,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1216':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(204,80,101,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1217':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(80,221,195,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1218':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(81,101,217,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1220':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(101,205,169,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1251':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(135,229,132,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1252':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(223,57,118,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1253':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(148,211,109,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1254':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(22,205,237,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1255':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(202,121,63,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1256':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(14,81,207,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1257':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(34,74,221,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1271':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(160,220,75,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1272':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(234,177,142,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '1273':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(210,210,88,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '151':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(213,119,68,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '152':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(203,13,95,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '153':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(61,218,168,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '154':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(186,18,216,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '155':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(164,218,62,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '171':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(201,120,174,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '172':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(204,124,110,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '201':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(115,222,154,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '202':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(190,29,226,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '203':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(231,40,221,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '204':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(211,106,202,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '205':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(158,200,106,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '206':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(221,120,203,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '207':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(204,63,223,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '251':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(66,203,29,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '252':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(230,223,27,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '253':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(240,181,17,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '254':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(64,225,118,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '271':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(217,82,37,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '272':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(27,71,203,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '301':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(136,224,131,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '302':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(212,53,188,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '303':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(32,85,200,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '304':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(103,98,226,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '305':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(78,147,230,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '351':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(211,59,140,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '352':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(235,24,122,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '353':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(132,62,237,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '371':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(131,227,79,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '372':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(22,149,208,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '401':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(120,185,206,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '402':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(237,179,125,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '403':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(202,36,161,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '404':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(226,115,126,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '405':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(129,64,240,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '406':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(202,104,137,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '407':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(240,232,123,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '451':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(130,232,133,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '452':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(210,16,187,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '453':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(225,94,124,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '471':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(116,13,219,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '472':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(113,218,224,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '473':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(107,194,213,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '501':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(48,37,205,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '502':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(226,28,38,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '503':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(68,218,181,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '504':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(235,39,238,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '505':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(166,224,18,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '506':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(222,145,110,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '507':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(108,112,212,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '508':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(101,201,229,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '509':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(49,121,222,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '551':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(218,71,159,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '552':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(201,81,47,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '554':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(145,217,86,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '571':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(144,115,237,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '572':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(210,214,96,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '701':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(232,77,69,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '702':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(185,137,227,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '703':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(221,73,117,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '704':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(187,205,73,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '705':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(103,142,206,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '706':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(24,200,65,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '707':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(223,86,32,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '708':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(214,110,97,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '709':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(213,123,114,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '710':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(136,225,73,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '711':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(200,89,198,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '712':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(19,217,78,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '713':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(169,71,202,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '751':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(21,32,226,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '752':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(220,130,136,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '753':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(218,233,87,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '754':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(204,134,231,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '755':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(127,222,90,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7601':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(37,239,162,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7602':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(173,38,210,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7603':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(235,165,66,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7604':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(121,79,220,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7605':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(41,187,206,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7606':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(213,220,117,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7681':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(237,138,165,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7682':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(52,220,22,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7701':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(25,203,55,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7702':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(61,208,12,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7703':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(137,50,204,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7704':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(130,233,171,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7705':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(131,68,203,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7706':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(159,132,233,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7707':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(118,118,215,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7708':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(176,205,33,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '771':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(164,201,85,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '772':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(50,222,142,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7901':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(76,121,236,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7902':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(232,115,162,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7903':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(58,23,234,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '7904':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(131,238,31,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '901':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(106,212,128,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '902':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(158,138,238,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '903':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(43,216,141,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '904':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(203,133,59,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '905':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(240,66,69,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '906':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(232,116,174,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '907':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(131,222,171,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '908':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(240,219,26,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '909':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(25,135,237,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '910':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(211,28,159,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '911':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(228,131,151,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '912':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(50,217,232,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '913':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(178,109,210,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '951':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(239,205,127,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '952':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(177,204,89,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '953':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(220,186,49,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '954':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(98,211,194,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '955':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(202,165,90,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '956':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(216,36,162,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '957':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(225,160,108,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '958':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(53,204,196,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '959':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(58,79,237,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '960':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(66,219,222,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '961':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(113,198,234,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '962':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(221,196,74,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '963':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(56,200,183,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '964':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(206,16,13,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '965':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(101,38,227,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '966':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(214,48,142,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '967':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(125,207,174,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '968':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(166,206,102,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '971':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(84,216,54,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '972':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(222,126,231,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '973':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(218,16,174,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case '974':
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(201,134,25,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                default:
+                    return {
+                pane: 'pane_alle_Routen_2',
+                opacity: 1,
+                color: 'rgba(151,45,221,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 5.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_alle_Routen_2');
+        map.getPane('pane_alle_Routen_2').style.zIndex = 402;
+        map.getPane('pane_alle_Routen_2').style['mix-blend-mode'] = 'normal';
+        var layer_alle_Routen_2 = new L.geoJson(json_alle_Routen_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_alle_Routen_2',
+            layerName: 'layer_alle_Routen_2',
+            pane: 'pane_alle_Routen_2',
+            onEachFeature: pop_alle_Routen_2,
+            style: style_alle_Routen_2_0,
+        });
+        bounds_group.addLayer(layer_alle_Routen_2);
+        map.addLayer(layer_alle_Routen_2);
+        setBounds();
+        map.addControl(new L.Control.Search({
+            layer: layer_alle_Routen_2,
+            initial: false,
+            hideMarkerOnCollapse: true,
+            propertyName: 'route'}));
+        if (typeof url === 'undefined') {
+            document.getElementsByClassName('search-button')[0].className += ' fa fa-binoculars';
+        } else {
+            document.getElementsByClassName('search-button')[1].className += ' fa fa-binoculars';
+        }
+        var mapDiv = document.getElementById('map');
+        var row = document.createElement('div');
+        row.className="row";
+        row.id="all";
+        row.style.height = "100%";
+        var col1 = document.createElement('div');
+        col1.className="col9";
+        col1.id = "mapWindow";
+        col1.style.height = "99%";
+        col1.style.width = "80%";
+        col1.style.display = "inline-block";
+        var col2 = document.createElement('div');
+        col2.className="col3";
+        col2.id = "menu";
+        col2.style.display = "inline-block";
+        mapDiv.parentNode.insertBefore(row, mapDiv);
+        document.getElementById("all").appendChild(col1);
+        document.getElementById("all").appendChild(col2);
+        col1.appendChild(mapDiv)
+        var Filters = {"unterhalt": "str","route": "str"};
+        function filterFunc() {
+          map.eachLayer(function(lyr){
+          if ("options" in lyr && "dataVar" in lyr["options"]){
+            features = this[lyr["options"]["dataVar"]].features.slice(0);
+            try{
+              for (key in Filters){
+                keyS = key.replace(/[^a-zA-Z0-9_]/g, "")
+                if (Filters[key] == "str" || Filters[key] == "bool"){
+                  var selection = [];
+                  var options = document.getElementById("sel_" + keyS).options
+                  for (var i=0; i < options.length; i++) {
+                    if (options[i].selected) selection.push(options[i].value);
+                  }
+                    try{
+                      if (key in features[0].properties){
+                        for (i = features.length - 1;
+                          i >= 0; --i){
+                          if (selection.indexOf(
+                          features[i].properties[key])<0
+                          && selection.length>0) {
+                          features.splice(i,1);
+                          }
+                        }
+                      }
+                    } catch(err){
+                  }
+                }
+                if (Filters[key] == "int"){
+                  sliderVals =  document.getElementById(
+                    "div_" + keyS).noUiSlider.get();
+                  try{
+                    if (key in features[0].properties){
+                    for (i = features.length - 1; i >= 0; --i){
+                      if (parseInt(features[i].properties[key])
+                          < sliderVals[0]
+                          || parseInt(features[i].properties[key])
+                          > sliderVals[1]){
+                            features.splice(i,1);
+                          }
+                        }
+                      }
+                    } catch(err){
+                    }
+                  }
+                if (Filters[key] == "real"){
+                  sliderVals =  document.getElementById(
+                    "div_" + keyS).noUiSlider.get();
+                  try{
+                    if (key in features[0].properties){
+                    for (i = features.length - 1; i >= 0; --i){
+                      if (features[i].properties[key]
+                          < sliderVals[0]
+                          || features[i].properties[key]
+                          > sliderVals[1]){
+                            features.splice(i,1);
+                          }
+                        }
+                      }
+                    } catch(err){
+                    }
+                  }
+                if (Filters[key] == "date"
+                  || Filters[key] == "datetime"
+                  || Filters[key] == "time"){
+                  try{
+                    if (key in features[0].properties){
+                      HTMLkey = key.replace(/[&\\/\\#,+()$~%.'":*?<>{} ]/g, '');
+                      startdate = document.getElementById("dat_" +
+                        HTMLkey + "_date1").value.replace(" ", "T");
+                      enddate = document.getElementById("dat_" +
+                        HTMLkey + "_date2").value.replace(" ", "T");
+                      for (i = features.length - 1; i >= 0; --i){
+                        if (features[i].properties[key] < startdate
+                          || features[i].properties[key] > enddate){
+                          features.splice(i,1);
+                        }
+                      }
+                    }
+                  } catch(err){
+                  }
+                }
+              }
+            } catch(err){
+            }
+          this[lyr["options"]["layerName"]].clearLayers();
+          this[lyr["options"]["layerName"]].addData(features);
+          }
+          })
+        }
+            document.getElementById("menu").appendChild(
+                document.createElement("div"));
+            var div_unterhalt = document.createElement('div');
+            div_unterhalt.id = "div_unterhalt";
+            div_unterhalt.className= "filterselect";
+            document.getElementById("menu").appendChild(div_unterhalt);
+            sel_unterhalt = document.createElement('select');
+            sel_unterhalt.multiple = true;
+            sel_unterhalt.size = 10;
+            sel_unterhalt.id = "sel_unterhalt";
+            var unterhalt_options_str = "<option value='' unselected></option>";
+            sel_unterhalt.onchange = function(){filterFunc()};
+            unterhalt_options_str  += '<option value="NULL">NULL</option>';
+            unterhalt_options_str  += '<option value="AWUR">AWUR</option>';
+            unterhalt_options_str  += '<option value="AWWA">AWWA</option>';
+            unterhalt_options_str  += '<option value="AWWI">AWWI</option>';
+            unterhalt_options_str  += '<option value="UB 1">UB 1</option>';
+            unterhalt_options_str  += '<option value="UB 10">UB 10</option>';
+            unterhalt_options_str  += '<option value="UB 12">UB 12</option>';
+            unterhalt_options_str  += '<option value="UB 2">UB 2</option>';
+            unterhalt_options_str  += '<option value="UB 3">UB 3</option>';
+            unterhalt_options_str  += '<option value="UB 4">UB 4</option>';
+            unterhalt_options_str  += '<option value="UB 5">UB 5</option>';
+            unterhalt_options_str  += '<option value="UB 7">UB 7</option>';
+            unterhalt_options_str  += '<option value="UB 9">UB 9</option>';
+            sel_unterhalt.innerHTML = unterhalt_options_str;
+            div_unterhalt.appendChild(sel_unterhalt);
+            var lab_unterhalt = document.createElement('div');
+            lab_unterhalt.innerHTML = 'unterhalt';
+            lab_unterhalt.className = 'filterlabel';
+            div_unterhalt.appendChild(lab_unterhalt);
+            var reset_unterhalt = document.createElement('div');
+            reset_unterhalt.innerHTML = 'clear filter';
+            reset_unterhalt.className = 'filterlabel';
+            reset_unterhalt.onclick = function() {
+                var options = document.getElementById("sel_unterhalt").options;
+                for (var i=0; i < options.length; i++) {
+                    options[i].selected = false;
+                }
+                filterFunc();
+            };
+            div_unterhalt.appendChild(reset_unterhalt);
+            document.getElementById("menu").appendChild(
+                document.createElement("div"));
+            var div_route = document.createElement('div');
+            div_route.id = "div_route";
+            div_route.className= "filterselect";
+            document.getElementById("menu").appendChild(div_route);
+            sel_route = document.createElement('select');
+            sel_route.multiple = true;
+            sel_route.size = 10;
+            sel_route.id = "sel_route";
+            var route_options_str = "<option value='' unselected></option>";
+            sel_route.onchange = function(){filterFunc()};
+            route_options_str  += '<option value="1001">1001</option>';
+            route_options_str  += '<option value="1002">1002</option>';
+            route_options_str  += '<option value="1003">1003</option>';
+            route_options_str  += '<option value="1004">1004</option>';
+            route_options_str  += '<option value="1005">1005</option>';
+            route_options_str  += '<option value="1006">1006</option>';
+            route_options_str  += '<option value="1007">1007</option>';
+            route_options_str  += '<option value="101">101</option>';
+            route_options_str  += '<option value="102">102</option>';
+            route_options_str  += '<option value="103">103</option>';
+            route_options_str  += '<option value="104">104</option>';
+            route_options_str  += '<option value="105">105</option>';
+            route_options_str  += '<option value="1050">1050</option>';
+            route_options_str  += '<option value="1051">1051</option>';
+            route_options_str  += '<option value="1052">1052</option>';
+            route_options_str  += '<option value="1053">1053</option>';
+            route_options_str  += '<option value="1054">1054</option>';
+            route_options_str  += '<option value="1055">1055</option>';
+            route_options_str  += '<option value="1056">1056</option>';
+            route_options_str  += '<option value="1057">1057</option>';
+            route_options_str  += '<option value="1071">1071</option>';
+            route_options_str  += '<option value="1072">1072</option>';
+            route_options_str  += '<option value="1201">1201</option>';
+            route_options_str  += '<option value="1202">1202</option>';
+            route_options_str  += '<option value="1203">1203</option>';
+            route_options_str  += '<option value="1204">1204</option>';
+            route_options_str  += '<option value="1205">1205</option>';
+            route_options_str  += '<option value="1206">1206</option>';
+            route_options_str  += '<option value="1207">1207</option>';
+            route_options_str  += '<option value="1208">1208</option>';
+            route_options_str  += '<option value="1209">1209</option>';
+            route_options_str  += '<option value="1210">1210</option>';
+            route_options_str  += '<option value="1211">1211</option>';
+            route_options_str  += '<option value="1212">1212</option>';
+            route_options_str  += '<option value="1213">1213</option>';
+            route_options_str  += '<option value="1214">1214</option>';
+            route_options_str  += '<option value="1215">1215</option>';
+            route_options_str  += '<option value="1216">1216</option>';
+            route_options_str  += '<option value="1217">1217</option>';
+            route_options_str  += '<option value="1218">1218</option>';
+            route_options_str  += '<option value="1220">1220</option>';
+            route_options_str  += '<option value="1251">1251</option>';
+            route_options_str  += '<option value="1252">1252</option>';
+            route_options_str  += '<option value="1253">1253</option>';
+            route_options_str  += '<option value="1254">1254</option>';
+            route_options_str  += '<option value="1255">1255</option>';
+            route_options_str  += '<option value="1256">1256</option>';
+            route_options_str  += '<option value="1257">1257</option>';
+            route_options_str  += '<option value="1258">1258</option>';
+            route_options_str  += '<option value="1271">1271</option>';
+            route_options_str  += '<option value="1272">1272</option>';
+            route_options_str  += '<option value="1273">1273</option>';
+            route_options_str  += '<option value="151">151</option>';
+            route_options_str  += '<option value="152">152</option>';
+            route_options_str  += '<option value="153">153</option>';
+            route_options_str  += '<option value="154">154</option>';
+            route_options_str  += '<option value="155">155</option>';
+            route_options_str  += '<option value="171">171</option>';
+            route_options_str  += '<option value="172">172</option>';
+            route_options_str  += '<option value="2">2</option>';
+            route_options_str  += '<option value="201">201</option>';
+            route_options_str  += '<option value="202">202</option>';
+            route_options_str  += '<option value="203">203</option>';
+            route_options_str  += '<option value="204">204</option>';
+            route_options_str  += '<option value="205">205</option>';
+            route_options_str  += '<option value="206">206</option>';
+            route_options_str  += '<option value="207">207</option>';
+            route_options_str  += '<option value="251">251</option>';
+            route_options_str  += '<option value="252">252</option>';
+            route_options_str  += '<option value="253">253</option>';
+            route_options_str  += '<option value="254">254</option>';
+            route_options_str  += '<option value="271">271</option>';
+            route_options_str  += '<option value="272">272</option>';
+            route_options_str  += '<option value="301">301</option>';
+            route_options_str  += '<option value="302">302</option>';
+            route_options_str  += '<option value="303">303</option>';
+            route_options_str  += '<option value="304">304</option>';
+            route_options_str  += '<option value="305">305</option>';
+            route_options_str  += '<option value="351">351</option>';
+            route_options_str  += '<option value="352">352</option>';
+            route_options_str  += '<option value="353">353</option>';
+            route_options_str  += '<option value="371">371</option>';
+            route_options_str  += '<option value="372">372</option>';
+            route_options_str  += '<option value="401">401</option>';
+            route_options_str  += '<option value="402">402</option>';
+            route_options_str  += '<option value="403">403</option>';
+            route_options_str  += '<option value="404">404</option>';
+            route_options_str  += '<option value="405">405</option>';
+            route_options_str  += '<option value="406">406</option>';
+            route_options_str  += '<option value="407">407</option>';
+            route_options_str  += '<option value="451">451</option>';
+            route_options_str  += '<option value="452">452</option>';
+            route_options_str  += '<option value="453">453</option>';
+            route_options_str  += '<option value="471">471</option>';
+            route_options_str  += '<option value="472">472</option>';
+            route_options_str  += '<option value="473">473</option>';
+            route_options_str  += '<option value="501">501</option>';
+            route_options_str  += '<option value="502">502</option>';
+            route_options_str  += '<option value="503">503</option>';
+            route_options_str  += '<option value="504">504</option>';
+            route_options_str  += '<option value="505">505</option>';
+            route_options_str  += '<option value="506">506</option>';
+            route_options_str  += '<option value="507">507</option>';
+            route_options_str  += '<option value="508">508</option>';
+            route_options_str  += '<option value="509">509</option>';
+            route_options_str  += '<option value="551">551</option>';
+            route_options_str  += '<option value="552">552</option>';
+            route_options_str  += '<option value="554">554</option>';
+            route_options_str  += '<option value="571">571</option>';
+            route_options_str  += '<option value="572">572</option>';
+            route_options_str  += '<option value="701">701</option>';
+            route_options_str  += '<option value="702">702</option>';
+            route_options_str  += '<option value="703">703</option>';
+            route_options_str  += '<option value="704">704</option>';
+            route_options_str  += '<option value="705">705</option>';
+            route_options_str  += '<option value="706">706</option>';
+            route_options_str  += '<option value="707">707</option>';
+            route_options_str  += '<option value="708">708</option>';
+            route_options_str  += '<option value="709">709</option>';
+            route_options_str  += '<option value="710">710</option>';
+            route_options_str  += '<option value="711">711</option>';
+            route_options_str  += '<option value="712">712</option>';
+            route_options_str  += '<option value="713">713</option>';
+            route_options_str  += '<option value="751">751</option>';
+            route_options_str  += '<option value="752">752</option>';
+            route_options_str  += '<option value="753">753</option>';
+            route_options_str  += '<option value="754">754</option>';
+            route_options_str  += '<option value="755">755</option>';
+            route_options_str  += '<option value="7601">7601</option>';
+            route_options_str  += '<option value="7602">7602</option>';
+            route_options_str  += '<option value="7603">7603</option>';
+            route_options_str  += '<option value="7604">7604</option>';
+            route_options_str  += '<option value="7605">7605</option>';
+            route_options_str  += '<option value="7606">7606</option>';
+            route_options_str  += '<option value="7681">7681</option>';
+            route_options_str  += '<option value="7682">7682</option>';
+            route_options_str  += '<option value="7701">7701</option>';
+            route_options_str  += '<option value="7702">7702</option>';
+            route_options_str  += '<option value="7703">7703</option>';
+            route_options_str  += '<option value="7704">7704</option>';
+            route_options_str  += '<option value="7705">7705</option>';
+            route_options_str  += '<option value="7706">7706</option>';
+            route_options_str  += '<option value="7707">7707</option>';
+            route_options_str  += '<option value="7708">7708</option>';
+            route_options_str  += '<option value="771">771</option>';
+            route_options_str  += '<option value="772">772</option>';
+            route_options_str  += '<option value="7901">7901</option>';
+            route_options_str  += '<option value="7902">7902</option>';
+            route_options_str  += '<option value="7903">7903</option>';
+            route_options_str  += '<option value="7904">7904</option>';
+            route_options_str  += '<option value="901">901</option>';
+            route_options_str  += '<option value="902">902</option>';
+            route_options_str  += '<option value="903">903</option>';
+            route_options_str  += '<option value="904">904</option>';
+            route_options_str  += '<option value="905">905</option>';
+            route_options_str  += '<option value="906">906</option>';
+            route_options_str  += '<option value="907">907</option>';
+            route_options_str  += '<option value="908">908</option>';
+            route_options_str  += '<option value="909">909</option>';
+            route_options_str  += '<option value="910">910</option>';
+            route_options_str  += '<option value="911">911</option>';
+            route_options_str  += '<option value="912">912</option>';
+            route_options_str  += '<option value="913">913</option>';
+            route_options_str  += '<option value="951">951</option>';
+            route_options_str  += '<option value="952">952</option>';
+            route_options_str  += '<option value="953">953</option>';
+            route_options_str  += '<option value="954">954</option>';
+            route_options_str  += '<option value="955">955</option>';
+            route_options_str  += '<option value="956">956</option>';
+            route_options_str  += '<option value="957">957</option>';
+            route_options_str  += '<option value="958">958</option>';
+            route_options_str  += '<option value="959">959</option>';
+            route_options_str  += '<option value="960">960</option>';
+            route_options_str  += '<option value="961">961</option>';
+            route_options_str  += '<option value="962">962</option>';
+            route_options_str  += '<option value="963">963</option>';
+            route_options_str  += '<option value="964">964</option>';
+            route_options_str  += '<option value="965">965</option>';
+            route_options_str  += '<option value="966">966</option>';
+            route_options_str  += '<option value="967">967</option>';
+            route_options_str  += '<option value="968">968</option>';
+            route_options_str  += '<option value="971">971</option>';
+            route_options_str  += '<option value="972">972</option>';
+            route_options_str  += '<option value="973">973</option>';
+            route_options_str  += '<option value="974">974</option>';
+            sel_route.innerHTML = route_options_str;
+            div_route.appendChild(sel_route);
+            var lab_route = document.createElement('div');
+            lab_route.innerHTML = 'route';
+            lab_route.className = 'filterlabel';
+            div_route.appendChild(lab_route);
+            var reset_route = document.createElement('div');
+            reset_route.innerHTML = 'clear filter';
+            reset_route.className = 'filterlabel';
+            reset_route.onclick = function() {
+                var options = document.getElementById("sel_route").options;
+                for (var i=0; i < options.length; i++) {
+                    options[i].selected = false;
+                }
+                filterFunc();
+            };
+            div_route.appendChild(reset_route);
+        </script>        
+    </body>
+</html>
