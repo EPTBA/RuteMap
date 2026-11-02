@@ -62,7 +62,7 @@ L.tileLayer(
 let selectedLayer = null;
 let zoomedFeature = null;
 
-fetch('Routen_2627.geojson')
+fetch('routen.geojson')
 .then(response => response.json())
 .then(data => {
 
@@ -101,11 +101,11 @@ bezirke.forEach(b => {
     }
 
     layer.bindTooltip(
-    "<b>" + feature.properties.route + "</b>",
-    {
-        sticky: true
-    }
-);
+		feature.properties.route,
+		{
+			sticky: true
+		}
+	);
 
 
 	layer.on('click', function() {
