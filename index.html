@@ -100,9 +100,12 @@ bezirke.forEach(b => {
 
     }
 
-    layer.bindTooltip(popupContent, {
+    layer.bindTooltip(
+    "<b>" + feature.properties.route + "</b>",
+    {
         sticky: true
-    });
+    }
+);
 
 
 	layer.on('click', function() {
