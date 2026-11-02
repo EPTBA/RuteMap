@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+
+<title>Winterdienst Routen 2026/2027</title>
+
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+html, body {
+    margin:0;
+    padding:0;
+    height:100%;
+}
+
+#map {
+    width:100%;
+    height:100vh;
+}
+
+#filterBox {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    background: white;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.3);
+}
+
+</style>
+
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="filterBox">
+    <label><b>Unterhaltsbezirk</b></label><br>
+    <select id="bezirkSelect">
+        <option value="all">alle</option>
+    </select>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+var map = L.map('map').setView([46.2, 8.8], 8);
+
+L.tileLayer(
+    'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png',
+    {
+        attribution: '&copy; Stadia Maps &copy; OpenStreetMap contributors',
+        maxZoom: 20
+    }
+).addTo(map);
+
+let selectedLayer = null;
+let zoomedFeature = null;
+
+fetch('Routen_2627.geojson')
+.then(response => response.json())
+.then(data => {
+
+const bezirke = [...new Set(
+    data.features.map(
+        f => f.properties.unterhalt
+    )
+)];
+
+bezirke.sort();
+
+const select = document.getElementById('bezirkSelect');
+
+bezirke.forEach(b => {
+
+    const option = document.createElement('option');
+    option.value = b;
+    option.textContent = b;
+    select.appendChild(option);
+
+});
+
+    let geojsonLayer = L.geoJSON(data,{
+
+        onEachFeature: function(feature, layer) {
+
+			let popupContent = "";
+
+			for (let key in feature.properties) {
+
+				popupContent +=
+					"<b>" + key + "</b>: " +
+					feature.properties[key] +
+					"<br>";
+
+    }
+
+    layer.bindTooltip(popupContent, {
+        sticky: true
+    });
+
+
+	layer.on('click', function() {
+
+		// Se clicco di nuovo la stessa route
+		if (zoomedFeature === layer) {
+
+			geojsonLayer.resetStyle(layer);
+
+			selectedLayer = null;
+			zoomedFeature = null;
+
+			map.fitBounds(geojsonLayer.getBounds(), {
+				padding: [50, 50]
+			});
+
+			return;
+		}
+
+		// Ripristina la selezione precedente
+		if (selectedLayer) {
+			geojsonLayer.resetStyle(selectedLayer);
+		}
+
+		selectedLayer = layer;
+		zoomedFeature = layer;
+
+		// Evidenzia la route
+		layer.setStyle({
+			color: 'orange',
+			weight: 8
+		});
+
+		// Zoom sulla route selezionata
+		map.fitBounds(layer.getBounds(), {
+			padding: [50, 50],
+			maxZoom: 16
+		});
+
+	});
+}
+
+    }).addTo(map);
+
+    map.fitBounds(geojsonLayer.getBounds());
+
+	select.addEventListener('change', function() {
+
+		geojsonLayer.eachLayer(function(layer) {
+
+			const bezirk = layer.feature.properties.unterhalt;
+
+			if (select.value === 'all' || bezirk === select.value) {
+
+				layer.addTo(map);
+
+			} else {
+
+				map.removeLayer(layer);
+
+			}
+
+		});
+
+	});
+
+})
+
+
+.catch(error => console.error(error));
+
+
+</script>
+
+</body>
+</html>
