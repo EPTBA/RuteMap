@@ -62,27 +62,6 @@ L.tileLayer(
 let selectedLayer = null;
 let zoomedFeature = null;
 
-// Assegna un colore a ogni distretto in modo deterministico
-function colorFor(value) {
-    let hash = 0;
-    for (let i = 0; i < value.length; i++) {
-        hash = value.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const hue = Math.abs(hash) % 360;
-    return 'hsl(' + hue + ', 70%, 45%)';
-}
-
-let geojsonLayer = L.geoJSON(data, {
-    style: function(feature) {
-        return {
-            color: colorFor(feature.properties.unterhalt),
-            weight: 4,
-            opacity: 0.9
-        };
-    },
-    // ...
-});
-
 fetch('routen.geojson')
 .then(response => response.json())
 .then(data => {
