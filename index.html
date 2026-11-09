@@ -21,7 +21,7 @@ html, body {
     background:#f2f2f2;
 }
 
-/* Desatura la mappa base OpenStreetMap, senza cambiarne le tile */
+/* OpenStreetMap-Basiskarte per CSS in Graustufen umwandeln */
 .leaflet-tile-pane {
     filter: grayscale(1);
 }
@@ -80,7 +80,7 @@ html, body {
         #e6194b, #3cb44b, #4363d8, #f58231);
 }
 
-/* Sotto-menu con l'elenco delle route, annidato sotto il bezirk */
+/* Untermenü mit der Liste der Routen, eingerückt unter dem Bezirk */
 #legend .route-list {
     margin: 2px 0 6px 20px;
     padding-left: 8px;
@@ -120,7 +120,7 @@ html, body {
 
 var map = L.map('map').setView([46.2, 8.8], 8);
 
-// Mappa base OpenStreetMap, resa in scala di grigi via CSS
+// OpenStreetMap-Basiskarte, per CSS in Graustufen dargestellt
 L.tileLayer(
     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     {
@@ -134,28 +134,28 @@ let geojsonLayer = null;
 let allRoutesVisible = true;
 let currentBezirk = 'all';
 
-// 12 colori ben distinguibili, uno per Unterhaltsbezirk
+// 12 gut unterscheidbare Farben, eine pro Unterhaltsbezirk
 const palette = [
-    '#e6194b', // rosso
-    '#3cb44b', // verde
-    '#4363d8', // blu
-    '#f58231', // arancio
-    '#911eb4', // viola
-    '#008080', // verde acqua
-    '#f032e6', // magenta
-    '#9a6324', // marrone
-    '#800000', // bordeaux
-    '#808000', // oliva
-    '#000075', // blu notte
-    '#46f0f0'  // ciano
+    '#e6194b', // Rot
+    '#3cb44b', // Grün
+    '#4363d8', // Blau
+    '#f58231', // Orange
+    '#911eb4', // Violett
+    '#008080', // Türkis
+    '#f032e6', // Magenta
+    '#9a6324', // Braun
+    '#800000', // Bordeaux
+    '#808000', // Oliv
+    '#000075', // Nachtblau
+    '#46f0f0'  // Cyan
 ];
 
 const fallbackColor = '#3388ff';
 
-// Bezirke che devono comparire in fondo alla lista
+// Bezirke, die am Ende der Liste erscheinen sollen
 const bezirkeInFondo = ['UB 10', 'UB 12'];
 
-// Mappa bezirk -> colore, riempita dopo aver letto i dati
+// Zuordnung Bezirk -> Farbe, wird nach dem Laden der Daten gefüllt
 const bezirkColors = {};
 
 function colorForBezirk(bezirk) {
@@ -170,7 +170,7 @@ fetch('routen.geojson')
         data.features.map(f => f.properties.unterhalt)
     )];
 
-    // Ordine alfabetico, ma UB 10 e UB 12 sempre in fondo
+    // Alphabetische Reihenfolge, aber UB 10 und UB 12 immer am Ende
     bezirke.sort(function(a, b) {
 
         const aFondo = bezirkeInFondo.indexOf(a) !== -1;
@@ -187,12 +187,12 @@ fetch('routen.geojson')
         return String(a).localeCompare(String(b), 'de');
     });
 
-    // Assegna un colore a ogni bezirk (cicla se sono più di 12)
+    // Jedem Bezirk eine Farbe zuweisen (zyklisch, falls mehr als 12)
     bezirke.forEach((b, i) => {
         bezirkColors[b] = palette[i % palette.length];
     });
 
-    // Mostra tutte le route (rispettando il filtro del Bezirk)
+    // Alle Routen anzeigen (unter Berücksichtigung des Bezirk-Filters)
     function showAllRoutes(fitView) {
 
         geojsonLayer.eachLayer(function(layer) {
@@ -216,7 +216,7 @@ fetch('routen.geojson')
         }
     }
 
-    // Adatta la vista alle route attualmente visibili
+    // Ansicht an die aktuell sichtbaren Routen anpassen
     function fitToVisible() {
 
         const bounds = L.latLngBounds([]);
@@ -232,10 +232,10 @@ fetch('routen.geojson')
         }
     }
 
-    // Isola ed evidenzia una route (stessa logica del click sulla mappa)
+    // Eine Route isolieren und hervorheben (gleiche Logik wie Klick auf der Karte)
     function selectRoute(layer) {
 
-        // Rimuove tutte le altre route dalla mappa
+        // Alle anderen Routen von der Karte entfernen
         geojsonLayer.eachLayer(function(other) {
             if (other !== layer) {
                 map.removeLayer(other);
@@ -259,10 +259,10 @@ fetch('routen.geojson')
         renderLegend();
     }
 
-    // ---- Legenda + filtro in un unico pannello ----
+    // ---- Legende + Filter in einem einzigen Panel ----
     const legend = document.getElementById('legend');
 
-    // Elenco route per un dato bezirk
+    // Routenliste für einen bestimmten Bezirk
     function routesOfBezirk(bezirk) {
 
         const routes = [];
@@ -290,7 +290,7 @@ fetch('routen.geojson')
             '" data-bezirk="all">' +
             '<span class="swatch"></span>alle</div>';
 
-        // Le route del bezirk attivo vengono salvate qui per il click
+        // Die Routen des aktiven Bezirks werden hier für den Klick gespeichert
         let activeRoutes = [];
 
         bezirke.forEach(b => {
@@ -302,7 +302,7 @@ fetch('routen.geojson')
                 colorForBezirk(b) + '"></span>' +
                 b + '</div>';
 
-            // Sotto-menu: solo sotto il bezirk selezionato
+            // Untermenü: nur unter dem ausgewählten Bezirk
             if (currentBezirk === b) {
 
                 activeRoutes = routesOfBezirk(b);
@@ -324,7 +324,7 @@ fetch('routen.geojson')
 
         legend.innerHTML = html;
 
-        // Click sui bezirke
+        // Klick auf die Bezirke
         legend.querySelectorAll('.legend-item').forEach(item => {
             item.addEventListener('click', function() {
                 currentBezirk = this.dataset.bezirk;
@@ -334,7 +334,7 @@ fetch('routen.geojson')
             });
         });
 
-        // Click sulle route del sotto-menu
+        // Klick auf die Routen im Untermenü
         legend.querySelectorAll('.route-item').forEach(item => {
             item.addEventListener('click', function(e) {
                 e.stopPropagation();
@@ -378,10 +378,10 @@ fetch('routen.geojson')
 
             layer.on('click', function(e) {
 
-                // Il click non deve arrivare alla mappa
+                // Der Klick darf nicht bis zur Karte durchgereicht werden
                 L.DomEvent.stopPropagation(e);
 
-                // Se clicco di nuovo la stessa route: torna a tutte
+                // Klick auf dieselbe Route: zurück zur Gesamtansicht
                 if (selectedLayer === layer) {
                     showAllRoutes(true);
                     renderLegend();
@@ -399,7 +399,7 @@ fetch('routen.geojson')
 
     map.fitBounds(geojsonLayer.getBounds());
 
-    // Click su un punto qualsiasi della mappa: torna alla vista completa
+    // Klick auf eine beliebige Stelle der Karte: zurück zur Gesamtansicht
     map.on('click', function() {
         if (!allRoutesVisible) {
             showAllRoutes(true);
