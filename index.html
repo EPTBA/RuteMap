@@ -39,7 +39,8 @@ html, body {
     line-height: 1.4;
     max-height: 60vh;
     overflow-y: auto;
-    min-width: 170px;
+    min-width: 190px;
+    max-width: 280px;
 }
 
 #legend .legend-title {
@@ -77,6 +78,32 @@ html, body {
 #legend .legend-item.all .swatch {
     background: linear-gradient(90deg,
         #e6194b, #3cb44b, #4363d8, #f58231);
+}
+
+/* Sotto-menu con l'elenco delle route, annidato sotto il bezirk */
+#legend .route-list {
+    margin: 2px 0 6px 20px;
+    padding-left: 8px;
+    border-left: 2px solid #ddd;
+}
+
+#legend .route-item {
+    padding: 3px 4px;
+    border-radius: 3px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#legend .route-item:hover {
+    background: #f0f0f0;
+}
+
+#legend .route-item.active {
+    background: #ffe6e6;
+    font-weight: bold;
 }
 </style>
 
@@ -125,6 +152,9 @@ const palette = [
 
 const fallbackColor = '#3388ff';
 
+// Bezirke che devono comparire in fondo alla lista
+const bezirkeInFondo = ['UB 10', 'UB 12'];
+
 // Mappa bezirk -> colore, riempita dopo aver letto i dati
 const bezirkColors = {};
 
@@ -140,7 +170,22 @@ fetch('routen.geojson')
         data.features.map(f => f.properties.unterhalt)
     )];
 
-    bezirke.sort();
+    // Ordine alfabetico, ma UB 10 e UB 12 sempre in fondo
+    bezirke.sort(function(a, b) {
+
+        const aFondo = bezirkeInFondo.indexOf(a) !== -1;
+        const bFondo = bezirkeInFondo.indexOf(b) !== -1;
+
+        if (aFondo !== bFondo) {
+            return aFondo ? 1 : -1;
+        }
+
+        if (aFondo && bFondo) {
+            return bezirkeInFondo.indexOf(a) - bezirkeInFondo.indexOf(b);
+        }
+
+        return String(a).localeCompare(String(b), 'de');
+    });
 
     // Assegna un colore a ogni bezirk (cicla se sono più di 12)
     bezirke.forEach((b, i) => {
@@ -187,8 +232,54 @@ fetch('routen.geojson')
         }
     }
 
+    // Isola ed evidenzia una route (stessa logica del click sulla mappa)
+    function selectRoute(layer) {
+
+        // Rimuove tutte le altre route dalla mappa
+        geojsonLayer.eachLayer(function(other) {
+            if (other !== layer) {
+                map.removeLayer(other);
+            }
+        });
+
+        layer.addTo(map);
+        layer.setStyle({
+            color: 'red',
+            weight: 8
+        });
+
+        selectedLayer = layer;
+        allRoutesVisible = false;
+
+        map.fitBounds(layer.getBounds(), {
+            padding: [50, 50],
+            maxZoom: 16
+        });
+
+        renderLegend();
+    }
+
     // ---- Legenda + filtro in un unico pannello ----
     const legend = document.getElementById('legend');
+
+    // Elenco route per un dato bezirk
+    function routesOfBezirk(bezirk) {
+
+        const routes = [];
+
+        geojsonLayer.eachLayer(function(layer) {
+            if (layer.feature.properties.unterhalt === bezirk) {
+                routes.push(layer);
+            }
+        });
+
+        routes.sort(function(a, b) {
+            return String(a.feature.properties.route)
+                .localeCompare(String(b.feature.properties.route), 'de');
+        });
+
+        return routes;
+    }
 
     function renderLegend() {
 
@@ -199,22 +290,60 @@ fetch('routen.geojson')
             '" data-bezirk="all">' +
             '<span class="swatch"></span>alle</div>';
 
+        // Le route del bezirk attivo vengono salvate qui per il click
+        let activeRoutes = [];
+
         bezirke.forEach(b => {
+
             html += '<div class="legend-item' +
                 (currentBezirk === b ? ' active' : '') +
                 '" data-bezirk="' + b + '">' +
                 '<span class="swatch" style="background:' +
                 colorForBezirk(b) + '"></span>' +
                 b + '</div>';
+
+            // Sotto-menu: solo sotto il bezirk selezionato
+            if (currentBezirk === b) {
+
+                activeRoutes = routesOfBezirk(b);
+
+                html += '<div class="route-list">';
+
+                activeRoutes.forEach(function(layer, i) {
+                    html += '<div class="route-item' +
+                        (selectedLayer === layer ? ' active' : '') +
+                        '" data-route-index="' + i + '">' +
+                        layer.feature.properties.route + '</div>';
+                });
+
+                html += '</div>';
+            }
         });
+
+        legend._routeLayers = activeRoutes;
 
         legend.innerHTML = html;
 
+        // Click sui bezirke
         legend.querySelectorAll('.legend-item').forEach(item => {
             item.addEventListener('click', function() {
                 currentBezirk = this.dataset.bezirk;
+                selectedLayer = null;
                 renderLegend();
                 showAllRoutes(true);
+            });
+        });
+
+        // Click sulle route del sotto-menu
+        legend.querySelectorAll('.route-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const layer = legend._routeLayers[
+                    parseInt(this.dataset.routeIndex, 10)
+                ];
+                if (layer) {
+                    selectRoute(layer);
+                }
             });
         });
     }
@@ -255,30 +384,11 @@ fetch('routen.geojson')
                 // Se clicco di nuovo la stessa route: torna a tutte
                 if (selectedLayer === layer) {
                     showAllRoutes(true);
+                    renderLegend();
                     return;
                 }
 
-                // Rimuove tutte le altre route dalla mappa
-                geojsonLayer.eachLayer(function(other) {
-                    if (other !== layer) {
-                        map.removeLayer(other);
-                    }
-                });
-
-                // Assicura che la route cliccata sia visibile ed evidenziata
-                layer.addTo(map);
-                layer.setStyle({
-                    color: 'red',
-                    weight: 8
-                });
-
-                selectedLayer = layer;
-                allRoutesVisible = false;
-
-                map.fitBounds(layer.getBounds(), {
-                    padding: [50, 50],
-                    maxZoom: 16
-                });
+                selectRoute(layer);
 
             });
         }
@@ -293,6 +403,7 @@ fetch('routen.geojson')
     map.on('click', function() {
         if (!allRoutesVisible) {
             showAllRoutes(true);
+            renderLegend();
         }
     });
 
