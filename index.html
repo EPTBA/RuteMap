@@ -241,6 +241,32 @@ function updateRouteLabels() {
     });
 }
 
+// --- Icona fiocco di neve blu chiaro su sfondo bianco, contorno grigio fine ---
+const snowflakeSvg =
+'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">' +
+'<circle cx="12" cy="12" r="11" fill="#ffffff" stroke="#999999" stroke-width="0.8"/>' +
+'<g stroke="#5aa9e6" stroke-width="1.6" stroke-linecap="round" fill="none">' +
+'<line x1="12" y1="5" x2="12" y2="19"/>' +
+'<line x1="5.9" y1="8.5" x2="18.1" y2="15.5"/>' +
+'<line x1="5.9" y1="15.5" x2="18.1" y2="8.5"/>' +
+'<line x1="9.9" y1="6.6" x2="12" y2="8.7"/>' +
+'<line x1="14.1" y1="6.6" x2="12" y2="8.7"/>' +
+'<line x1="9.9" y1="17.4" x2="12" y2="15.3"/>' +
+'<line x1="14.1" y1="17.4" x2="12" y2="15.3"/>' +
+'<line x1="6.9" y1="10.4" x2="9.6" y2="11"/>' +
+'<line x1="6.9" y1="13.6" x2="9.6" y2="13"/>' +
+'<line x1="17.1" y1="10.4" x2="14.4" y2="11"/>' +
+'<line x1="17.1" y1="13.6" x2="14.4" y2="13"/>' +
+'</g></svg>';
+
+const snowflakeIcon = L.divIcon({
+    className: 'snowflake-icon',
+    html: snowflakeSvg,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    popupAnchor: [0, -10]
+});
+
 fetch('Routen_2627.geojson')
 .then(response => response.json())
 .then(data => {
