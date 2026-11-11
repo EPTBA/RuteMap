@@ -684,39 +684,6 @@ fetch('SWS_TBA.geojson')
             });
         },
 
-        onEachFeature: function(feature, layer) {
-
-            const props = feature.properties;
-            const node = props[NODE_PROPERTY] || '';
-
-            let popup = "";
-            for (let key in props) {
-                popup += "<b>" + key + "</b>: " +
-                         props[key] + "<br>";
-            }
-            popup += "<br><b>Temperatur:</b> <span class='temp'>lädt…</span>";
-            layer.bindPopup(popup);
-
-            layer.on('popupopen', function(e) {
-                const el = e.popup.getElement().querySelector('.temp');
-                if (!el) return;
-                if (!node) {
-                    el.textContent = 'kein SN-Decentlab';
-                    logApi('<span class="status-err">kein SN-Decentlab in den Properties</span>');
-                    return;
-                }
-                fetchTemperature(node)
-                    .then(res => {
-                        if (!res) { el.textContent = 'keine Daten'; return; }
-                        el.textContent = res.value + ' °C';
-                    })
-                    .catch(err => {
-                        console.error('API:', err);
-                        el.textContent = 'Fehler';
-                    });
-            });
-        }
-
     });
 
     // Standardmässig nicht auf der Karte
