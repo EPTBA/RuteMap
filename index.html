@@ -143,6 +143,32 @@ html, body {
     color: #c00;
     font-size: 12px;
 }
+
+/* Pannello di debug in basso a destra */
+#apiDebug {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    z-index: 1000;
+    width: 380px;
+    max-width: calc(100vw - 20px);
+    max-height: 40vh;
+    overflow: auto;
+    background: rgba(255,255,255,0.96);
+    border: 1px solid #cccccc;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.3);
+    font-family: Menlo, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 8px 10px;
+    color: #222222;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+#apiDebug .status-ok   { color: #1a7f37; font-weight: bold; }
+#apiDebug .status-err  { color: #c62828; font-weight: bold; }
+#apiDebug .label       { color: #666666; }
 </style>
 
 </head>
@@ -152,9 +178,21 @@ html, body {
 
 <div id="legend"></div>
 
+<div id="apiDebug"><span class="label">API: noch keine Anfrage</span></div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
+
+// ==== Proxy Cloudflare ====
+const PROXY_URL = 'https://sws-proxy.tuonome.workers.dev';
+const NODE_PROPERTY = 'SN-Decentlab';
+
+const debugBox = document.getElementById('apiDebug');
+
+function logApi(html) {
+    debugBox.innerHTML = html;
+}
 
 var map = L.map('map', {
     // Karte ist fixiert: kein Verschieben, kein Zoomen mit Mausrad/Doppelklick
@@ -184,6 +222,10 @@ let currentBezirk = 'all';
 
 // Beschriftung der Routen ein-/ausschalten
 let showRouteLabels = false;
+
+// Strassenwetterstationen ein-/ausblenden (Standard: aus)
+let showSws = false;
+let swsLayer = null;
 
 // 12 gut unterscheidbare Farben, eine pro Unterhaltsbezirk
 const palette = [
@@ -266,6 +308,49 @@ const snowflakeIcon = L.divIcon({
     iconAnchor: [10, 10],
     popupAnchor: [0, -10]
 });
+
+// ==== Chiamata al proxy ====
+function fetchTemperature(node) {
+    const url = new URL(PROXY_URL);
+    url.searchParams.set('node', node);
+
+    const t0 = performance.now();
+    logApi('<span class="label">Anfrage läuft…</span>\n' +
+           '<span class="label">node:</span> ' + node);
+
+    return fetch(url.toString())
+    .then(r => {
+        const ms = Math.round(performance.now() - t0);
+        const cls = r.ok ? 'status-ok' : 'status-err';
+        return r.text().then(body => {
+            logApi(
+                '<span class="' + cls + '">HTTP ' + r.status + ' ' + r.statusText +
+                '</span>  <span class="label">(' + ms + ' ms)</span>\n' +
+                '<span class="label">node:</span> ' + node + '\n' +
+                '<span class="label">body:</span>\n' + body
+            );
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return JSON.parse(body);
+        });
+    })
+    .then(json => {
+        const series = json.results && json.results[0] && json.results[0].series;
+        if (!series || !series.length) return null;
+        const s = series[0];
+        const row = s.values[0];
+        return {
+            value: row[s.columns.indexOf('last')],
+            time: row[s.columns.indexOf('time')]
+        };
+    })
+    .catch(err => {
+        const ms = Math.round(performance.now() - t0);
+        logApi('<span class="status-err">FEHLER: ' + err.message +
+               '</span>  <span class="label">(' + ms + ' ms)</span>\n' +
+               '<span class="label">node:</span> ' + node);
+        throw err;
+    });
+}
 
 fetch('Routen_2627.geojson')
 .then(response => response.json())
@@ -434,6 +519,12 @@ fetch('Routen_2627.geojson')
             (showRouteLabels ? ' checked' : '') + '>' +
             'Routenbeschriftung anzeigen</label>';
 
+        // Schalter für die Strassenwetterstationen
+        html += '<label class="label-toggle">' +
+            '<input type="checkbox" id="sws-toggle"' +
+            (showSws ? ' checked' : '') + '>' +
+            'Strassenwetterstationen einblenden</label>';
+
         legend._routeLayers = activeRoutes;
 
         legend.innerHTML = html;
@@ -467,6 +558,15 @@ fetch('Routen_2627.geojson')
             toggle.addEventListener('change', function() {
                 showRouteLabels = this.checked;
                 updateRouteLabels();
+            });
+        }
+
+        // Schalter für die Strassenwetterstationen
+        const swsToggle = legend.querySelector('#sws-toggle');
+        if (swsToggle) {
+            swsToggle.addEventListener('change', function() {
+                showSws = this.checked;
+                updateSws();
             });
         }
     }
@@ -553,7 +653,19 @@ fetch('UB_Grenzen.geojson')
 })
 .catch(error => console.error(error));
 
-// --- Punti SWS (fiocchi di neve) ---
+// --- Strassenwetterstationen: ein-/ausblenden ---
+function updateSws() {
+    if (!swsLayer) {
+        return;
+    }
+    if (showSws) {
+        swsLayer.addTo(map);
+    } else {
+        map.removeLayer(swsLayer);
+    }
+}
+
+// --- Punti SWS (fiocchi di neve) con Temperatur ---
 fetch('SWS_TBA.geojson')
 .then(response => {
     if (!response.ok) {
@@ -563,7 +675,7 @@ fetch('SWS_TBA.geojson')
 })
 .then(data => {
 
-    const swsLayer = L.geoJSON(data, {
+    swsLayer = L.geoJSON(data, {
 
         pointToLayer: function(feature, latlng) {
             return L.marker(latlng, {
@@ -573,21 +685,46 @@ fetch('SWS_TBA.geojson')
         },
 
         onEachFeature: function(feature, layer) {
+
+            const props = feature.properties;
+            const node = props[NODE_PROPERTY] || '';
+
             let popup = "";
-            for (let key in feature.properties) {
+            for (let key in props) {
                 popup += "<b>" + key + "</b>: " +
-                         feature.properties[key] + "<br>";
+                         props[key] + "<br>";
             }
-            if (popup) {
-                layer.bindPopup(popup);
-            }
+            popup += "<br><b>Temperatur:</b> <span class='temp'>lädt…</span>";
+            layer.bindPopup(popup);
+
+            layer.on('popupopen', function(e) {
+                const el = e.popup.getElement().querySelector('.temp');
+                if (!el) return;
+                if (!node) {
+                    el.textContent = 'kein SN-Decentlab';
+                    logApi('<span class="status-err">kein SN-Decentlab in den Properties</span>');
+                    return;
+                }
+                fetchTemperature(node)
+                    .then(res => {
+                        if (!res) { el.textContent = 'keine Daten'; return; }
+                        el.textContent = res.value + ' °C';
+                    })
+                    .catch(err => {
+                        console.error('API:', err);
+                        el.textContent = 'Fehler';
+                    });
+            });
         }
 
-    }).addTo(map);
+    });
+
+    // Standardmässig nicht auf der Karte
+    updateSws();
 
 })
+.catch(error => console.error(error));
 
-	
 </script>
 
 </body>
