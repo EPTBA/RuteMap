@@ -527,6 +527,41 @@ fetch('UB_Grenzen.geojson')
 })
 .catch(error => console.error(error));
 
+// --- Punti SWS (fiocchi di neve) ---
+fetch('SWS_TBA.geojson')
+.then(response => {
+    if (!response.ok) {
+        throw new Error('HTTP ' + response.status);
+    }
+    return response.json();
+})
+.then(data => {
+
+    const swsLayer = L.geoJSON(data, {
+
+        pointToLayer: function(feature, latlng) {
+            return L.marker(latlng, {
+                icon: snowflakeIcon,
+                riseOnHover: true
+            });
+        },
+
+        onEachFeature: function(feature, layer) {
+            let popup = "";
+            for (let key in feature.properties) {
+                popup += "<b>" + key + "</b>: " +
+                         feature.properties[key] + "<br>";
+            }
+            if (popup) {
+                layer.bindPopup(popup);
+            }
+        }
+
+    }).addTo(map);
+
+})
+
+	
 </script>
 
 </body>
